@@ -1,0 +1,65 @@
+stages:              
+  - test
+  - build:dev
+variables:
+    dependencies_install:
+      value: "npm ci"
+      description: "Enter the command to install dependencies in all environment"
+
+    Build_CMD_FOR_DEV:
+      value: "npm run build"
+      description: "Enter the command to build in dev environment"
+
+image: node:16
+
+.build:
+  before_script:
+    - echo "Starting build job"
+    - chmod +x /Users/$DEV_SERVER_USER/script/env_script.sh
+    - Path=$(pwd)
+    - |
+      if [[ $CI_JOB_NAME == *"dev" ]];then
+        VAULT_ENGINE=dev
+      elif [[ $CI_JOB_NAME == *"staging" ]];then
+        VAULT_ENGINE=staging
+      elif [[ $CI_JOB_NAME == *"prod" ]];then
+        VAULT_ENGINE=prod
+      fi
+      cd /Users/$DEV_SERVER_USER/script && ./env_script.sh $VAULT_ENGINE $CI_PROJECT_NAME-$VAULT_ENGINE $VAULT_TOKEN 
+    - mv /Users/$DEV_SERVER_USER/script/.env $Path && cd $Path
+    - echo ".env file succesfully extracted"
+
+lint:
+  stage: test
+  script:
+    - $dependencies_install
+    - echo "Starting the lint testing"
+    - npm run lint
+
+unit-test:
+  stage: test
+  script:
+    - $dependencies_install
+    - echo "Startig the unit testing"
+    - npm run test
+
+unit-test-coverage:
+  stage: test
+  script:
+    - $dependencies_install
+    - echo "Startig the unit testing coverage"
+    - npm test -- --coverage
+  coverage: /All files[^|]*\|[^|]*\s+([\d\.]+)/
+
+build:dev:                                             
+  extends: 
+    - .build
+  stage: build:dev
+  script:
+    - $dependencies_install
+    - $Build_CMD_FOR_DEV
+    - echo "Build dev complete"
+  artifacts:
+    paths:
+      - build/
+    when: on_success
